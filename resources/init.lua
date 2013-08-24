@@ -378,6 +378,13 @@ function Rock:init(pos, vel, spin_rate)
    go:add_component('CSensor', {fixture={type='circle', radius=r, density=100}})
 end
 
+function Rock:update()
+   local go = self:go()
+   if not go then return end
+
+   toroid_wrap(go)
+end
+
 function indicators()
    local color = {1,1,1,0.6}
    player_indicator = Indicator(font, {screen_width/2, screen_height - font:line_height()/2}, color)
@@ -398,7 +405,7 @@ function level_timer()
       local spd = vel:length()
       time_remaining = time_remaining - time_update_period / gamma(spd)
       local dilation = 1 - 1/gamma(spd)
-      time_indicator:update('Time Remaining  %.3f %.3f', time_remaining, dilation)
+      time_indicator:update('Time Remaining  %.3f', time_remaining)
       time_timer:reset(time_update_period, time_updater)
    end
    time_updater()
@@ -415,7 +422,7 @@ function make_background()
    local bw = background.w
    local bh = background.h
    local bg = world:create_go()
-   bg:add_component('CStaticSprite', {entry=background})
+   bg:add_component('CStaticSprite', {entry=background, layer=constant.BACKGROUND})
    bg:pos(screen_rect:center())
    return bg
 end
@@ -489,8 +496,14 @@ function level_end()
    local labels = indicators()
    player_indicator:update('Distance Traveled  %.3f au', dist2au(player_last_stats.distance))
    time_indicator:update('Best Speed  %.4f c', player_last_stats.best_speed / c)
+
+   local pressz = Indicator(font, {screen_width/2, screen_height/2})
+   pressz:update('Press Z to Play Again')
+   table.insert(labels, pressz)
+
    player_last_stats = {}
-   next_level = 1
+
+   local bg = make_background()
 
    level_running_test = function()
       local input = util.input_state()
@@ -500,6 +513,8 @@ function level_end()
       for ii, label in ipairs(labels) do
          label:terminate()
       end
+      bg:delete_me(1)
+      next_level = 1
    end
 end
 
