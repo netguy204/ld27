@@ -12,6 +12,13 @@ local font = nil
 local speed_indicator = nil
 local player = nil
 
+local level_teardown = function()
+end
+
+local level_running_test = function()
+   return false
+end
+
 local function default_font()
    if not font then
       local characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!?,\'"'
@@ -30,7 +37,7 @@ local function default_font()
 end
 
 -- speed of light... for our purposes
-local c = 3000
+local c = 1000
 local function gamma(spd)
    return 1 / math.sqrt(1 - (spd * spd) / (c * c))
 end
@@ -40,15 +47,18 @@ local Indicator = oo.class(oo.Object)
 function Indicator:init(font, pos, color)
    self.font = font
    self.pos = pos
-   self.text = stage:add_component('CDrawText', {font=font,
-                                                 color=color})
+   self.text = stage:add_component('CDrawText', {font=font, color=color})
 end
 
 function Indicator:update(msg, ...)
    msg = string.format(msg, ...)
-   self.text:offset({self.pos[1] - font:string_width(msg)/2,
-                     self.pos[2] - font:line_height()/2})
+   self.text:offset({self.pos[1] - self.font:string_width(msg)/2,
+                     self.pos[2] - self.font:line_height()/2})
    self.text:message(msg)
+end
+
+function Indicator:terminate()
+   self.text:delete_me(1)
 end
 
 local function leaving_screen(pos, vel)
@@ -81,6 +91,8 @@ end
 
 function Source:spawn()
    local go = self:go()
+   if not go then return end
+
    self.kind.make(go:pos(), self.sink)
    self.timer:reset(util.rand_exponential(self.rate), self:bind('spawn'))
 end
@@ -217,6 +229,8 @@ end
 
 function Player:update()
    local go = self:go()
+   if not go then return end
+
    local pos = vector.new(go:pos())
    local vel = vector.new(go:vel())
    local angle = vector.new(go:vel()):angle()
@@ -273,13 +287,39 @@ function Player:colliding_with(other)
    end
 end
 
-function level_init()
-   util.install_basic_keymap()
-   world:gravity({0,0})
+function indicators()
+   local color = {1,1,1,0.6}
+   speed_indicator = Indicator(font, {screen_width/2, screen_height - font:line_height()/2}, color)
+   time_indicator = Indicator(font, {screen_width/2, screen_height - font:line_height()*3/2}, color)
+   return {speed_indicator, time_indicator}
+end
 
-   local cam = stage:find_component('Camera', nil)
-   cam:pre_render(util.fthread(background))
+function level_timer()
+   local time_update_period = 0.1
+   local time_remaining = 10
+   local time_timer = Timer()
+   local time_updater = nil
+   time_updater = function()
+      local go = player:go()
+      if not go then return end
 
+      local vel = vector.new(go:vel())
+      local spd = vel:length()
+      time_remaining = time_remaining - time_update_period / gamma(spd)
+      local dilation = 1 - 1/gamma(spd)
+      time_indicator:update('Time Remaining  %.3f %.3f', time_remaining, dilation)
+      time_timer:reset(time_update_period, time_updater)
+   end
+   time_updater()
+
+   -- return a function that will determine if the level is complete
+   local complete = function()
+      return time_remaining > 0
+   end
+   return complete
+end
+
+function level1()
    local energetic_sink = Sink({screen_width, screen_height/2})
    local energetic_spawner = Source({screen_width/2, screen_height * 2.0/3},
                                     HyperPhoton, energetic_sink)
@@ -287,32 +327,63 @@ function level_init()
    local slow_sink = Sink({0, screen_height/2})
    local slow_spawner = Source({screen_width/2, screen_height / 3},
                                SlowPhoton, slow_sink)
-   slow_spawner.min_speed = 100
-   slow_spawner.max_speed = 200
+   slow_spawner.rate = 3
 
    local background = world:atlas_entry('resources/background1', 'background1')
    local bw = background.w
    local bh = background.h
-   local go = world:create_go()
-   go:add_component('CStaticSprite', {entry=background})
-   go:pos(screen_rect:center())
+   local bg = world:create_go()
+   bg:add_component('CStaticSprite', {entry=background})
+   bg:pos(screen_rect:center())
 
    player = Player({0.1, screen_height/2}, vector.new({200, 0}))
-   font = default_font()
-   local color = {1,1,1,0.6}
-   speed_indicator = Indicator(font, {screen_width/2, screen_height - font:line_height()/2}, color)
-   time_indicator = Indicator(font, {screen_width/2, screen_height - font:line_height()*3/2}, color)
+   local labels = indicators()
 
-   local time_update_period = 0.1
-   local time_remaining = 10
-   local time_timer = Timer()
-   local time_updater = nil
-   time_updater = function()
-      local vel = vector.new(player:go():vel())
-      local spd = vel:length()
-      time_remaining = time_remaining - time_update_period / gamma(spd)
-      time_indicator:update('Time Remaining  %.3f', time_remaining)
-      time_timer:reset(time_update_period, time_updater)
+   level_running_test = level_timer()
+   level_teardown = function()
+      for ii, label in ipairs(labels) do
+         label:terminate()
+      end
+      local term = function(obj)
+         obj:terminate()
+      end
+      DynO.with_all(term)
+      bg:delete_me(1)
    end
-   time_updater()
+end
+
+function level_end()
+   level_running_test = function()
+      return true
+   end
+   level_teardown = function()
+   end
+end
+
+function init()
+   util.install_basic_keymap()
+   world:gravity({0,0})
+
+   print(stage)
+   local cam = stage:find_component('Camera', nil)
+   cam:pre_render(util.fthread(background))
+
+   font = default_font()
+
+   local levels = { level1, level_end }
+   local next_level = 1
+
+   local level_progression = function()
+      if not level_running_test() then
+         level_teardown()
+         levels[next_level]()
+         next_level = next_level + 1
+      end
+   end
+
+   stage:add_component('CScripted', {update_thread=util.fthread(level_progression)})
+end
+
+function level_init()
+   util.protect(init)()
 end
