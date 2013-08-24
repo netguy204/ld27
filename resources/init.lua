@@ -9,8 +9,10 @@ local DynO = require 'DynO'
 
 local screen_rect = Rect(0, 0, screen_width, screen_height)
 local font = nil
-local speed_indicator = nil
+local player_indicator = nil
 local player = nil
+local player_last_stats = {speed=100} -- fixme: for testing
+local next_level = 1
 
 local level_teardown = function()
 end
@@ -39,7 +41,31 @@ end
 -- speed of light... for our purposes
 local c = 1000
 local function gamma(spd)
+   -- make sure we return a real number
+   spd = math.min(spd, c * 0.9999)
    return 1 / math.sqrt(1 - (spd * spd) / (c * c))
+end
+
+function toroid_wrap(go)
+   local pos = go:pos()
+   -- if we're leaving the screen, wrap us back around
+   if not screen_rect:contains(pos) then
+      if pos[1] > screen_rect.maxx then
+         pos[1] = 0.1
+      elseif pos[1] < screen_rect.minx then
+         pos[1] = screen_rect.maxx - 0.1
+      end
+      if pos[2] > screen_rect.maxy then
+         pos[2] = screen_rect.miny + 0.1
+      elseif pos[2] < screen_rect.miny then
+         pos[2] = screen_rect.maxy - 0.1
+      end
+      go:pos(pos)
+   end
+end
+
+function dist2au(dist)
+   return dist * 3e6 / 150e9
 end
 
 local Indicator = oo.class(oo.Object)
@@ -247,24 +273,8 @@ function Player:update()
    local vel_adj = vector.new({0, yspd_adj})
 
    go:apply_impulse(vel_adj * go:mass())
-
-   -- if we're leaving the screen, wrap us back around
-   if not screen_rect:contains(pos) then
-      if pos[1] > screen_rect.maxx then
-         pos[1] = 0.1
-      elseif pos[1] < screen_rect.minx then
-         -- we got shoved back. launch us again
-         pos[1] = 0.1
-         pos[2] = util.rand_between(screen_rect.miny, screen_rect.maxy)
-         vel[1] = 200
-         go:vel(vel)
-      end
-      pos[2] = util.clamp(pos[2], screen_rect.miny, screen_rect.maxy)
-      go:pos(pos)
-   end
-
-   -- update our speed indicator
-   speed_indicator:update('Speed  %.1f c', vel[1] / c)
+   toroid_wrap(go)
+   self:update_indicators()
 end
 
 function Player:colliding_with(other)
@@ -273,25 +283,106 @@ function Player:colliding_with(other)
       local vel = vector.new(go:vel())
 
       local veladj = nil
-      local invgamma = 1 / gamma(math.abs(vel[1]))
 
       if other:is_a(EnergeticPhoton) then
-         veladj = vector.new({100, 0}) * invgamma
+         veladj = vector.new({100, 0})
       elseif other:is_a(HyperPhoton) then
-         veladj = vector.new({300, 0}) * invgamma
+         veladj = vector.new({300, 0})
       elseif other:is_a(SlowPhoton) then
-         veladj = vector.new({-100, 0}) * invgamma
+         veladj = vector.new({-100, 0})
       end
+
+      local newvel = vel + veladj
+
+      -- don't let us go backwards
+      if newvel[1] < 0 then
+         veladj[1] = -vel[1]
+      end
+
+      -- apply the adjustment using the gamma of the proposed final
+      -- velocity
+      local invgamma = 1 / gamma(math.abs(vel[1]))
+      veladj = veladj * invgamma
+
       other:terminate()
       go:apply_impulse(veladj * go:mass())
    end
 end
 
+function Player:stats()
+   local go = self:go()
+   local speed = go:vel()[1]
+   local best_speed = speed
+   if player_last_stats.best_speed then
+      best_speed = math.max(player_last_stats.best_speed, speed)
+   end
+
+   return {speed = speed,
+           distance = self.dist,
+           best_speed = best_speed}
+end
+
+local L1Player = oo.class(Player)
+
+function L1Player:update_indicators()
+   -- update our speed indicator
+   local go = self:go()
+   if not go then return end
+
+   local vel = go:vel()
+   player_indicator:update('Speed  %.4f c', vel[1] / c)
+end
+
+local L2Player = oo.class(Player)
+
+function L2Player:update()
+   Player.update(self)
+
+   -- apply an additional drag force
+   local go = self:go()
+   if not go then return end
+
+   local vel = vector.new(go:vel())
+   local drag = 0.01
+   local drag_force = vel:norm() * (-drag)
+   go:apply_force(drag_force)
+end
+
+function L2Player:update_indicators()
+   local go = self:go()
+   if not go then return end
+   local vel = go:vel()
+
+   local dist = self.dist or 0
+   self.dist = dist + vel[1] * world:dt()
+
+   player_indicator:update('Distance  %.2f au', dist2au(self.dist))
+end
+
+local Rock = oo.class(DynO)
+
+function Rock:init(pos, vel, spin_rate)
+   DynO.init(self, pos)
+
+   local go = self:go()
+   go:fixed_rotation(0)
+   go:vel(vel)
+   go:angle_rate(spin_rate)
+
+   local _art = world:atlas_entry(constant.ATLAS, 'rock1')
+   local w = 2*_art.w
+   local h = 2*_art.h
+   local r = math.sqrt(w*w + h*h) * 0.5
+
+   go:add_component('CColoredSprite', {entry=_art, w=w, h=h})
+   go:add_component('CSensor', {fixture={type='circle', radius=r, density=100}})
+end
+
 function indicators()
    local color = {1,1,1,0.6}
-   speed_indicator = Indicator(font, {screen_width/2, screen_height - font:line_height()/2}, color)
+   player_indicator = Indicator(font, {screen_width/2, screen_height - font:line_height()/2}, color)
    time_indicator = Indicator(font, {screen_width/2, screen_height - font:line_height()*3/2}, color)
-   return {speed_indicator, time_indicator}
+   return {player_indicator, time_indicator}
 end
 
 function level_timer()
@@ -319,28 +410,70 @@ function level_timer()
    return complete
 end
 
-function level1()
-   local energetic_sink = Sink({screen_width, screen_height/2})
-   local energetic_spawner = Source({screen_width/2, screen_height * 2.0/3},
-                                    HyperPhoton, energetic_sink)
-
-   local slow_sink = Sink({0, screen_height/2})
-   local slow_spawner = Source({screen_width/2, screen_height / 3},
-                               SlowPhoton, slow_sink)
-   slow_spawner.rate = 3
-
+function make_background()
    local background = world:atlas_entry('resources/background1', 'background1')
    local bw = background.w
    local bh = background.h
    local bg = world:create_go()
    bg:add_component('CStaticSprite', {entry=background})
    bg:pos(screen_rect:center())
+   return bg
+end
 
-   player = Player({0.1, screen_height/2}, vector.new({200, 0}))
+function level1()
+   local esink_pos = {screen_width, util.rand_between(screen_height/6, screen_height*5/6)}
+   local esource_pos = {util.rand_between(screen_width/3, screen_width*2/3),
+                        util.rand_between(screen_height/3, screen_height*2/3)}
+   local energetic_sink = Sink(esink_pos)
+   local energetic_spawner = Source(esource_pos, HyperPhoton, energetic_sink)
+
+   local ssink_pos = {0, util.rand_between(screen_height/6, screen_height*5/6)}
+   local ssource_pos = {util.rand_between(screen_width/3, screen_width*2/3),
+                        util.rand_between(screen_height/3, screen_height*2/3)}
+   local slow_sink = Sink(ssink_pos)
+   local slow_spawner = Source(ssource_pos, SlowPhoton, slow_sink)
+   slow_spawner.rate = 4
+
+   local bg = make_background()
+   player = L1Player({0.1, screen_height/2}, vector.new({200, 0}))
    local labels = indicators()
 
    level_running_test = level_timer()
    level_teardown = function()
+      player_last_stats = player:stats()
+      for ii, label in ipairs(labels) do
+         label:terminate()
+      end
+      local term = function(obj)
+         obj:terminate()
+      end
+      DynO.with_all(term)
+      bg:delete_me(1)
+   end
+end
+
+function level2()
+   local bg = make_background()
+
+   -- scatter some rocks
+   local nrocks = 5
+   for ii=1,nrocks do
+      local rpos = vector.new({util.rand_between(screen_width/3, screen_width*2/3),
+                               util.rand_between(screen_height/3, screen_height*2/3)})
+      local rvel = util.rand_vector(100, 200)
+      local rspin = util.rand_between(-2*math.pi*0.3, 2*math.pi*0.3)
+      Rock(rpos, rvel, rspin)
+   end
+
+   -- launch the player with their previous stats, launch at the top
+   -- so they'll be safe for a little while
+   player = L2Player({0.1, screen_height*4/5}, vector.new({player_last_stats.speed, 0}))
+
+   local labels = indicators()
+
+   level_running_test = level_timer()
+   level_teardown = function()
+      player_last_stats = player:stats()
       for ii, label in ipairs(labels) do
          label:terminate()
       end
@@ -353,10 +486,20 @@ function level1()
 end
 
 function level_end()
+   local labels = indicators()
+   player_indicator:update('Distance Traveled  %.3f au', dist2au(player_last_stats.distance))
+   time_indicator:update('Best Speed  %.4f c', player_last_stats.best_speed / c)
+   player_last_stats = {}
+   next_level = 1
+
    level_running_test = function()
-      return true
+      local input = util.input_state()
+      return (not input.action1)
    end
    level_teardown = function()
+      for ii, label in ipairs(labels) do
+         label:terminate()
+      end
    end
 end
 
@@ -364,14 +507,12 @@ function init()
    util.install_basic_keymap()
    world:gravity({0,0})
 
-   print(stage)
    local cam = stage:find_component('Camera', nil)
    cam:pre_render(util.fthread(background))
 
    font = default_font()
 
-   local levels = { level1, level_end }
-   local next_level = 1
+   local levels = { level1, level2, level_end }
 
    local level_progression = function()
       if not level_running_test() then
