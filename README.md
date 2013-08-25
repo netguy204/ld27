@@ -6,20 +6,28 @@ You are a new-born photon. Make the most of your life and go as far
 and fast as you can.
 
 
-Demo Release (Halfway done): http://bit.ly/1dEoDZZ
+Demo Release
+============
 
-Final Release: Not yet complete!
+I created this build on Saturday night when the game was roughly at
+its "halfway-done" point. This will run on Mac, Windows, and Linux:
+http://bit.ly/1dEoDZZ
 
-Build from Source:
+Final Release
+=============
 
-$ git clone https://github.com/netguy204/ld27
+Not yet complete! This will be released near the end of the 48 hour
+competition (ends Sunday, 9PM EST).
 
-$ cd ld27
+Build from Source
+=================
 
-$ git submodule init
+You will need a working GNU toolchain and a system and a local system
+that is supported by SDL.
 
-$ git submodule update
-
-$ make
-
-$ ./run
+    $ git clone https://github.com/netguy204/ld27
+    $ cd ld27
+    $ git submodule init
+    $ git submodule update
+    $ make
+    $ ./run
