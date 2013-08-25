@@ -645,12 +645,13 @@ function launch_story()
       [[I knew that I shouldnt get too close. They would only sap my energy]]
    }
 
-   local demo_player = DemoPlayer({0.1, screen_height/2}, {player_last_stats.speed, 0})
+   local demo_player = nil
    local seq = {
       function(ctrl)
          if story_played then
             ctrl.running = false
          else
+            demo_player = DemoPlayer({0.1, screen_height/2}, {player_last_stats.speed, 0})
             ctrl.text_chunk(story[1])()
          end
       end,
