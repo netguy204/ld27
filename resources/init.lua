@@ -19,6 +19,7 @@ local next_level = 1
 local current_level = 0
 local story_played = false
 local background_color = {0,0,0,1}
+local level_seed = 0
 
 local trails = {}
 
@@ -533,13 +534,13 @@ function story()
    local story = {
       [[Life of a Photon]],
 
-      [[I was born in star. I was young and full of hope]],
+      [[I was born in star. I was young and full of hope.]],
 
-      [[My cousins were supportive. We were heading in the same direction]],
+      [[My cousins were supportive. We were heading in the same direction.]],
 
-      [[There were others who tried to stand in the way]],
+      [[There were others who tried to stand in the way.]],
 
-      [[Though there would be challenges, it was time to pick up speed]]
+      [[Though there would be challenges, it was time to pick up speed.]]
    }
 
    local sink = nil
@@ -584,11 +585,11 @@ end
 
 function launch_story()
    local story = {
-      [[I soared out the stellar nursary and into the vastness of space]],
+      [[I soared out of the stellar nursery and into the vastness of space.]],
 
-      [[There I encountered objects that were far more massive than I]],
+      [[There I encountered objects that were far more massive than I.]],
 
-      [[I knew that I shouldnt get too close. They would only sap my energy]]
+      [[I knew that I shouldnt get too close. They would only sap my energy.]]
    }
 
    local demo_player = nil
@@ -621,23 +622,23 @@ end
 function finish_story()
    local story = {}
    if (player_last_stats.best_speed / c) < 0.3 then
-      table.insert(story, [[In spite of my best efforts, I never really picked up speed]])
+      table.insert(story, [[In spite of my best efforts, I never really picked up speed.]])
    elseif (player_last_stats.best_speed / c) < 0.6 then
-      table.insert(story, [[I made good time through the trials of life]])
+      table.insert(story, [[I made good time through the trials of life.]])
    elseif (player_last_stats.best_speed / c) < 0.8 then
-      table.insert(story, [[In the end, I was known as one of the quickest and brightest]])
+      table.insert(story, [[In the end, I was known as one of the quickest and brightest.]])
    else
-      table.insert(story, [[Nothing in the universe could match my speed]])
+      table.insert(story, [[Nothing in the universe could match my speed.]])
    end
 
    if dist2au(player_last_stats.distance) < 0.05 then
-      table.insert(story, [[Sad to say, my life didnt go far]])
+      table.insert(story, [[Sad to say, my life didnt go far.]])
    elseif dist2au(player_last_stats.distance) < 0.1 then
-      table.insert(story, [[I didnt settle far from home, but it was a good trip]])
+      table.insert(story, [[I didnt settle far from home, but it was a good trip.]])
    elseif dist2au(player_last_stats.distance) < 0.2 then
-      table.insert(story, [[I reached for the stars and really almost made it]])
+      table.insert(story, [[I reached for the stars and really almost made it.]])
    else
-      table.insert(story, [[No one I know has ever seen what Ive seen]])
+      table.insert(story, [[No one I know has ever seen what Ive seen.]])
    end
 
    local seq = {
@@ -656,6 +657,8 @@ function finish_story()
 end
 
 function level1()
+   math.randomseed(level_seed)
+
    local esink_pos = {screen_width, util.rand_between(screen_height/6, screen_height*5/6)}
    local esource_pos = {util.rand_between(screen_width/3, screen_width*2/3),
                         util.rand_between(screen_height/3, screen_height*2/3)}
@@ -685,6 +688,8 @@ function level1()
 end
 
 function level2()
+   math.randomseed(level_seed)
+
    local bg = make_background()
 
    -- scatter some rocks
@@ -738,7 +743,7 @@ function level_end()
    local speed = Indicator(font, top + displacement, color)
 
    distance:update('Distance Traveled  %.3f au%s', dist2au(player_last_stats.distance), dist_suffix)
-   speed:update('Best Speed  %.4f c%s', player_last_stats.best_speed / c, speed_suffix)
+   speed:update('Speed  %.4f c%s', player_last_stats.best_speed / c, speed_suffix)
 
    if session_last_play_stats then
       color = {1,1,1,0.5}
@@ -779,6 +784,8 @@ function init()
    load_sfx('baddie', {'resources/baddie1.ogg'})
 
    math.randomseed(os.time())
+   level_seed = math.random()
+
    util.install_basic_keymap()
    world:gravity({0,0})
 
