@@ -1,6 +1,7 @@
 # "Life of a Photon"
 
-A 48-hour Game made for Ludum Dare 27
+A 48-hour Game made for Ludum Dare 27. You can see and vote for my
+entry here: http://www.ludumdare.com/compo/ludum-dare-27/?action=preview&uid=5044
 
 You are a new-born photon. Make the most of your life and go as far
 and fast as you can.
