@@ -101,29 +101,29 @@ function star_flame(go)
    local params =
       {def=
           {layer=constant.BACKGROUND,
-           n=1000,
+           n=500,
            renderer={name='PSC_E2SystemRenderer',
                      params={entry=_art}},
            activator={name='PSConstantRateActivator',
-                      params={rate=10000}},
+                      params={rate=5000}},
            components={
               {name='PSConstantAccelerationUpdater',
                params={acc={0,10}}},
               {name='PSTimeAlphaUpdater',
-               params={time_constant=0.3,
+               params={time_constant=0.8,
                        max_scale=6.0}},
               {name='PSFireColorUpdater',
                params={max_life=0.5,
                        start_temperature=9000,
                        end_temperature=500}},
               {name='PSBoxInitializer',
-               params={initial={0,0,screen_width,0},
-                       refresh={0,0,screen_width,0},
+               params={initial={0,-50,screen_width,-30},
+                       refresh={0,-50,screen_width,-30},
                        minv={-100,100},
                        maxv={100,300}}},
               {name='PSTimeInitializer',
-               params={min_life=0.3,
-                       max_life=0.6}},
+               params={min_life=0.25,
+                       max_life=0.35}},
               {name='PSTimeTerminator'}}}}
 
    return go:add_component('CParticleSystem', params)
