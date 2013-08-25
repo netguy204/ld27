@@ -14,6 +14,7 @@ local player_indicator = nil
 local player = nil
 local player_last_stats = {}
 local session_stats = {}
+local session_last_play_stats = nil
 local next_level = 1
 local current_level = 0
 local story_played = false
@@ -270,7 +271,7 @@ function Player:update()
    local last_dist = self.last_dist or 0
    local new_dist = math.floor((self.dist or 0) / trail_spacing)
    if not (new_dist == last_dist) then
-      local item = {pos = pos, color={1,1,1,1}, angle=angle, scale=1}
+      local item = {pos=pos, color={1,1,1,1}, angle=angle, scale=1}
       self:add_trail_component(item)
       table.insert(self:world_trail(), item)
    end
@@ -282,7 +283,7 @@ end
 function Player:terminate()
    local go = self:go()
    local pos = go:pos()
-   table.insert(self:world_trail(), {pos = pos, color = {1,1,0,0.5}, scale=2})
+   table.insert(self:world_trail(), {pos=pos, color={1,1,0,0.5}, scale=2, angle=0})
 
    DynO.terminate(self)
    for ii, item in ipairs(self.trail) do
@@ -714,9 +715,41 @@ function level2()
 end
 
 function level_end()
-   indicators()
-   player_indicator:update('Distance Traveled  %.3f au', dist2au(player_last_stats.distance))
-   time_indicator:update('Best Speed  %.4f c', player_last_stats.best_speed / c)
+   -- update our session stats
+   local new_stats = {
+      best_distance=math.max(session_stats.best_distance or 0, player_last_stats.distance),
+      best_speed=math.max(session_stats.best_speed or 0, player_last_stats.best_speed)
+   }
+
+   local dist_suffix = ''
+   if session_stats.best_distance and player_last_stats.distance > session_stats.best_distance then
+      dist_suffix = ' (new personal best)'
+   end
+   local speed_suffix = ''
+   if session_stats.best_speed and player_last_stats.best_speed > session_stats.best_speed then
+      speed_suffix = ' (new personal best)'
+   end
+
+   local color = {1,1,1,1}
+   local top = vector.new({screen_width/2, screen_height - font:line_height()})
+   local displacement = vector.new({0, -font:line_height()})
+
+   local distance = Indicator(font, top, color)
+   local speed = Indicator(font, top + displacement, color)
+
+   distance:update('Distance Traveled  %.3f au%s', dist2au(player_last_stats.distance), dist_suffix)
+   speed:update('Best Speed  %.4f c%s', player_last_stats.best_speed / c, speed_suffix)
+
+   if session_last_play_stats then
+      color = {1,1,1,0.5}
+      local best_distance = Indicator(font, top + displacement * 3, color)
+      local best_speed = Indicator(font, top + displacement * 4, color)
+      best_distance:update('Best Distance  %.3f au', dist2au(new_stats.best_distance))
+      best_speed:update('Best Speed  %.4f c', new_stats.best_speed / c)
+   end
+
+   session_last_play_stats = player_last_stats
+   session_stats = new_stats
 
    local pressz = Indicator(font, {screen_width/2, screen_height/2})
    pressz:update('Press Z to Play Again')
