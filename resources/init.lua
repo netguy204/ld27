@@ -732,6 +732,7 @@ function level2()
    -- case you get stuck
    local sink = Sink({screen_width, screen_height/2})
    local source = L2Source({0, screen_height/2}, EnergeticPhoton, sink)
+   source.rate = 1
 
    level_running_test = level_timer()
    level_teardown = function()
