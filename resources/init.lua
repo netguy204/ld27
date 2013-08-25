@@ -73,15 +73,30 @@ function Source:init(pos, kind, sink)
    local _art = world:atlas_entry(constant.ATLAS, 'goodie_source')
    local w = _art.w * 2
    local h = _art.h * 2
-   go:add_component('CColoredSprite', {entry=_art, w=w, h=h})
+   self.sprite = go:add_component('CColoredSprite', {entry=_art, w=w, h=h})
 end
 
 function Source:spawn()
    local go = self:go()
    if not go then return end
 
-   self.kind.make(go:pos(), self.sink)
    self.timer:reset(util.rand_exponential(self.rate), self:bind('spawn'))
+   return  self.kind.make(go:pos(), self.sink)
+end
+
+local L2Source = oo.class(Source)
+
+function L2Source:init(pos, kind, sink)
+   Source.init(self, pos, kind, sink)
+   self.sprite:delete_me(1)
+end
+
+function L2Source:spawn()
+   local obj = Source.spawn(self)
+
+   -- force a boring velocity
+   if not obj then return end
+   obj:go():vel({200,0})
 end
 
 local Sink = oo.class(DynO)
@@ -712,6 +727,11 @@ function level2()
    player = L2Player({0.1, screen_height*4/5}, vector.new({player_last_stats.speed, 0}))
 
    indicators()
+
+   -- add offscreen source and sync to provide a stream of goodies in
+   -- case you get stuck
+   local sink = Sink({screen_width, screen_height/2})
+   local source = L2Source({0, screen_height/2}, EnergeticPhoton, sink)
 
    level_running_test = level_timer()
    level_teardown = function()
