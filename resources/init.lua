@@ -15,8 +15,11 @@ local player = nil
 local player_last_stats = {}
 local session_stats = {}
 local next_level = 1
+local current_level = 0
 local story_played = false
 local background_color = {0,0,0,1}
+
+local trails = {}
 
 local level_teardown = function()
 end
@@ -183,6 +186,9 @@ function Player:init(pos, vel)
    DynO.init(self, pos)
    self.max_speed = 300
    self.max_delta_speed = 1000
+   self.current_screen = 1
+   self.trail = {}
+   self._trail = world:atlas_entry(constant.ATLAS, 'trail')
 
    local go = self:go()
    go:vel(vel)
@@ -195,6 +201,39 @@ function Player:init(pos, vel)
    go:add_component('CSensor', {fixture={type='rect', w=w, h=h, density=10}})
 
    player_streak(go)
+   self:set_screen(1)
+end
+
+function Player:add_trail_component(item)
+   local w = self._trail.w * 2 * item.scale
+   local h = self._trail.h * 2 * item.scale
+   local comp = stage:add_component('CColoredSprite', {entry=self._trail, w=w, h=h,
+                                                       angle_offset=item.angle,
+                                                       offset=item.pos, color=item.color})
+   table.insert(self.trail, comp)
+end
+
+function Player:world_trail()
+   if not trails[current_level] then
+      trails[current_level] = {}
+   end
+   if not trails[current_level][self.current_screen] then
+      trails[current_level][self.current_screen] = {}
+   end
+   return trails[current_level][self.current_screen]
+end
+
+function Player:set_screen(screen)
+   self.current_screen = screen
+   for ii, item in ipairs(self.trail) do
+      item:delete_me(1)
+   end
+   self.trail = {}
+
+   -- pull in our last pass through this screen
+   for ii, item in ipairs(self:world_trail()) do
+      self:add_trail_component(item)
+   end
 end
 
 function Player:update()
@@ -205,6 +244,9 @@ function Player:update()
    local vel = vector.new(go:vel())
    local angle = vector.new(go:vel()):angle()
    go:angle(angle)
+
+   local dist = self.dist or 0
+   self.dist = dist + vel[1] * world:dt()
 
    local input = util.input_state()
 
@@ -217,8 +259,35 @@ function Player:update()
    local vel_adj = vector.new({0, yspd_adj})
 
    go:apply_impulse(vel_adj * go:mass())
-   toroid_wrap(go)
+
+   local screen_change = toroid_wrap(go)
+   if not (screen_change == 0) then
+      -- update the visible trail
+      self:set_screen(self.current_screen + screen_change)
+   end
+
+   local trail_spacing = 20
+   local last_dist = self.last_dist or 0
+   local new_dist = math.floor((self.dist or 0) / trail_spacing)
+   if not (new_dist == last_dist) then
+      local item = {pos = pos, color={1,1,1,1}, angle=angle, scale=1}
+      self:add_trail_component(item)
+      table.insert(self:world_trail(), item)
+   end
+   self.last_dist = new_dist
+
    self:update_indicators()
+end
+
+function Player:terminate()
+   local go = self:go()
+   local pos = go:pos()
+   table.insert(self:world_trail(), {pos = pos, color = {1,1,0,0.5}, scale=2})
+
+   DynO.terminate(self)
+   for ii, item in ipairs(self.trail) do
+      item:delete_me(1)
+   end
 end
 
 function Player:colliding_with(other)
@@ -323,10 +392,6 @@ end
 function L2Player:update_indicators()
    local go = self:go()
    if not go then return end
-   local vel = go:vel()
-
-   local dist = self.dist or 0
-   self.dist = dist + vel[1] * world:dt()
 
    player_indicator:update('Distance  %.2f au', dist2au(self.dist))
 end
@@ -432,7 +497,7 @@ function make_story(seq)
    local press = 'Press Z'
    local press_pos = vector.new({screen_width / 2, font:line_height()})
    local press_black = Indicator(font, press_pos, {0,0,0,1})
-   local press_white = Indicator(font, press_pos + vector.new({0,-4}), {1,1,1,1})
+   local press_white = Indicator(font, press_pos + vector.new({0,-2}), {1,1,1,1})
    press_black:update(press)
    press_white:update(press)
 
@@ -694,6 +759,7 @@ function init()
    local level_progression = function()
       if not level_running_test() then
          level_teardown()
+         current_level = levels[next_level]
          levels[next_level]()
          next_level = next_level + 1
       end
