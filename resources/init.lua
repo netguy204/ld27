@@ -603,6 +603,12 @@ function launch_story()
          end
       end,
       function(ctrl)
+         for x=1,3 do
+            for y=1,2 do
+               local rspin = util.rand_between(-2*math.pi*0.3, 2*math.pi*0.3)
+               Rock({screen_width * x / 4, screen_height * y / 3}, {0,0}, rspin)
+            end
+         end
          ctrl.text_chunk(story[2])()
       end,
       function(ctrl)
@@ -612,6 +618,7 @@ function launch_story()
          ctrl.running = false
          story_played = true
          demo_player:terminate()
+         DynO.terminate_all()
       end
    }
 
