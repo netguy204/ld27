@@ -239,8 +239,8 @@ local Player = oo.class(DynO)
 
 function Player:init(pos, vel)
    DynO.init(self, pos)
-   self.max_speed = 100
-   self.max_delta_speed = 10
+   self.max_speed = 300
+   self.max_delta_speed = 1000
 
    local go = self:go()
    go:vel(vel)
@@ -265,10 +265,10 @@ function Player:update()
    local input = util.input_state()
 
    -- adjust updown vel if buttun is pressed
-   local yspd_adj = input.updown * self.max_delta_speed
-   if yspd_adj + vel[2] > self.max_speed then
+   local yspd_adj = input.updown * self.max_delta_speed * world:dt()
+   if math.abs(yspd_adj + vel[2]) > self.max_speed then
       -- cap the speed
-      yspd_adj = self.max_speed - vel[2]
+      yspd_adj = util.sign(vel[2]) * self.max_speed - vel[2]
    end
    local vel_adj = vector.new({0, yspd_adj})
 
@@ -405,7 +405,7 @@ function level_timer()
       local spd = vel:length()
       time_remaining = time_remaining - time_update_period / gamma(spd)
       local dilation = 1 - 1/gamma(spd)
-      time_indicator:update('Time Remaining  %.3f', time_remaining)
+      time_indicator:update('Time Remaining  %01.3f', time_remaining)
       time_timer:reset(time_update_period, time_updater)
    end
    time_updater()
@@ -425,6 +425,124 @@ function make_background()
    bg:add_component('CStaticSprite', {entry=background, layer=constant.BACKGROUND})
    bg:pos(screen_rect:center())
    return bg
+end
+
+function screen_sequence(fns, ...)
+   local args = {...}
+   local trigger = util.rising_edge_trigger(false)
+   local count = util.count(fns)
+   local current = 1
+
+   fns[current](table.unpack(args))
+   local thread = function(go, comp)
+      local input = util.input_state()
+      if trigger(input.action1) then
+         current = current + 1
+         if current == count then
+            comp:delete_me(1)
+         end
+         fns[current](table.unpack(args))
+      end
+   end
+
+   if count > 1 then
+      local comp = stage:add_component('CScripted', {update_thread=util.fthread(thread)})
+   end
+end
+
+function make_story(seq)
+   local text = stage:add_component('CDrawText', {font=font})
+
+   local press = 'Press Z'
+   press = stage:add_component('CDrawText', {font=font,
+                                             color={0.6, 0.6, 1.0, 0.8},
+                                             message=press,
+                                             offset={(screen_width - font:string_width(press))/2,
+                                                     font:line_height()}})
+   local bg = make_background()
+
+   local text_chunk = function(str)
+      local fn = function()
+         local sw = font:string_width(util.split(str, "\n")[1])
+         local offset = (screen_width - sw) / 2
+         text:message(str)
+         text:offset({offset,screen_height-font:line_height()*2})
+      end
+      return fn
+   end
+
+   local story = {
+      text_chunk = text_chunk,
+      running = true
+   }
+
+   screen_sequence(seq, story)
+
+   level_running_test = function()
+      return story.running
+   end
+
+   level_teardown = function()
+      text:delete_me(1)
+      press:delete_me(1)
+      bg:delete_me(1)
+   end
+end
+
+function story()
+   local story = {
+      [[Life of a Photon]],
+
+      [[I was born in Alpha Centauri, towards the end of the neptural cycle]],
+
+      [[My mother had always been energetic.
+ When she fused, no one was surprised]],
+
+      [[I enjoyed my time in the stellar nusery. My cousins were supportive
+of the direction that I was heading]]
+   }
+
+   local seq = {
+      function(ctrl)
+         ctrl.text_chunk(story[1])()
+      end,
+      function(ctrl)
+         ctrl.text_chunk(story[2])()
+      end,
+      function(ctrl)
+         ctrl.text_chunk(story[3])()
+      end,
+      function(ctrl)
+         ctrl.text_chunk(story[4])()
+      end,
+      function(ctrl)
+         ctrl.running = false
+      end
+   }
+
+   make_story(seq)
+end
+
+function launch_story()
+   local story = {
+      [[I soared out the stellar nursary and into the vastness of space]],
+
+      [[There I encountered objects that were far more massive than I]]
+   }
+
+   local seq = {
+      function(ctrl)
+         ctrl.text_chunk(story[1])()
+      end,
+      function(ctrl)
+         ctrl.text_chunk(story[2])()
+      end,
+      function(ctrl)
+         ctrl.running = false
+      end
+   }
+
+   make_story(seq)
 end
 
 function level1()
@@ -514,11 +632,12 @@ function level_end()
          label:terminate()
       end
       bg:delete_me(1)
-      next_level = 1
+      next_level = 2
    end
 end
 
 function init()
+   math.randomseed(os.time())
    util.install_basic_keymap()
    world:gravity({0,0})
 
@@ -527,7 +646,9 @@ function init()
 
    font = default_font()
 
-   local levels = { level1, level2, level_end }
+   local levels = { story, level1, launch_story, level2, level_end }
+   local songs = {'resources/stellar_nursery.ogg'}
+   util.loop_music(songs)
 
    local level_progression = function()
       if not level_running_test() then
