@@ -6,53 +6,23 @@ local constant = require 'constant'
 local Rect = require 'Rect'
 local Timer = require 'Timer'
 local DynO = require 'DynO'
+local Indicator = require 'Indicator'
 
-local screen_rect = Rect(0, 0, screen_width, screen_height)
-local font = nil
+require 'support'
+
 local player_indicator = nil
 local player = nil
-local player_last_stats = {speed=100} -- fixme: for testing
+local player_last_stats = {}
+local session_stats = {}
 local next_level = 1
 local story_played = false
-local star_particles = nil
 local background_color = {0,0,0,1}
-
-local sfx = {}
-
-local function load_sfx(kind, names)
-   sfx[kind] = {}
-   for ii, name in ipairs(names) do
-      table.insert(sfx[kind], world:get_sound(name, 1.0))
-   end
-end
-
-local function play_sfx(kind)
-   local snd = util.rand_choice(sfx[kind])
-   world:play_sound(snd, 1)
-end
 
 local level_teardown = function()
 end
 
 local level_running_test = function()
    return false
-end
-
-local function default_font()
-   if not font then
-      local characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!?,\'"'
-      font = world:create_object('Font')
-      font:load(world:atlas(constant.ATLAS), 'visitor', characters)
-      font:scale(3)
-      font:set_char_width('i', 3)
-      font:set_char_lead('i', -2)
-      font:set_char_width('.', 3)
-      font:set_char_lead('.', -2)
-      font:set_char_width(',', 3)
-      font:set_char_lead(',', -3)
-      font:word_separation(5)
-   end
-   return font
 end
 
 -- speed of light... for our purposes
@@ -63,91 +33,8 @@ local function gamma(spd)
    return 1 / math.sqrt(1 - (spd * spd) / (c * c))
 end
 
-function toroid_wrap(go)
-   local pos = go:pos()
-   -- if we're leaving the screen, wrap us back around
-   if not screen_rect:contains(pos) then
-      if pos[1] > screen_rect.maxx then
-         pos[1] = 0.1
-      elseif pos[1] < screen_rect.minx then
-         pos[1] = screen_rect.maxx - 0.1
-      end
-      if pos[2] > screen_rect.maxy then
-         pos[2] = screen_rect.miny + 0.1
-      elseif pos[2] < screen_rect.miny then
-         pos[2] = screen_rect.maxy - 0.1
-      end
-      go:pos(pos)
-   end
-end
-
 function dist2au(dist)
    return dist * 3e6 / 150e9
-end
-
-local function star_flame(go)
-   local _art = world:atlas_entry(constant.ATLAS, 'fire')
-   local params =
-      {def=
-          {layer=constant.BACKGROUND,
-           n=1000,
-           renderer={name='PSC_E2SystemRenderer',
-                     params={entry=_art}},
-           activator={name='PSConstantRateActivator',
-                      params={rate=10000}},
-           components={
-              {name='PSConstantAccelerationUpdater',
-               params={acc={0,10}}},
-              {name='PSTimeAlphaUpdater',
-               params={time_constant=0.3,
-                       max_scale=6.0}},
-              {name='PSFireColorUpdater',
-               params={max_life=0.5,
-                       start_temperature=9000,
-                       end_temperature=500}},
-              {name='PSBoxInitializer',
-               params={initial={0,0,screen_width,0},
-                       refresh={0,0,screen_width,0},
-                       minv={-100,100},
-                       maxv={100,300}}},
-              {name='PSTimeInitializer',
-               params={min_life=0.3,
-                       max_life=0.6}},
-              {name='PSTimeTerminator'}}}}
-
-   return go:add_component('CParticleSystem', params)
-end
-
-local function enable_star_particles()
-   if not star_particles then
-      star_particles = star_flame(stage)
-   end
-end
-
-local function disable_star_particles()
-   if star_particles then
-      star_particles:delete_me(1)
-   end
-   star_particles = nil
-end
-
-local Indicator = oo.class(oo.Object)
-
-function Indicator:init(font, pos, color)
-   self.font = font
-   self.pos = pos
-   self.text = stage:add_component('CDrawText', {font=font, color=color})
-end
-
-function Indicator:update(msg, ...)
-   msg = string.format(msg, ...)
-   self.text:offset({self.pos[1] - self.font:string_width(msg)/2,
-                     self.pos[2] - self.font:line_height()/2})
-   self.text:message(msg)
-end
-
-function Indicator:terminate()
-   self.text:delete_me(1)
 end
 
 local function leaving_screen(pos, vel)
@@ -474,7 +361,6 @@ function indicators()
    local color = {1,1,1,0.6}
    player_indicator = Indicator(font, {screen_width/2, screen_height - font:line_height()/2}, color)
    time_indicator = Indicator(font, {screen_width/2, screen_height - font:line_height()*3/2}, color)
-   return {player_indicator, time_indicator}
 end
 
 function level_timer()
@@ -541,22 +427,20 @@ function screen_sequence(fns, ...)
 end
 
 function make_story(seq)
-   local text = stage:add_component('CDrawText', {font=font})
+   local text = Indicator(font, {screen_width/2, screen_height - font:line_height() * 2}, {1,1,1,1})
 
    local press = 'Press Z'
-   press = stage:add_component('CDrawText', {font=font,
-                                             color={0.6, 0.6, 1.0, 0.8},
-                                             message=press,
-                                             offset={(screen_width - font:string_width(press))/2,
-                                                     font:line_height()}})
+   local press_pos = vector.new({screen_width / 2, font:line_height()})
+   local press_black = Indicator(font, press_pos, {0,0,0,1})
+   local press_white = Indicator(font, press_pos + vector.new({0,-4}), {1,1,1,1})
+   press_black:update(press)
+   press_white:update(press)
+
    local bg = make_background()
 
    local text_chunk = function(str)
       local fn = function()
-         local sw = font:string_width(util.split(str, "\n")[1])
-         local offset = (screen_width - sw) / 2
-         text:message(str)
-         text:offset({offset,screen_height-font:line_height()*2})
+         text:update(str)
       end
       return fn
    end
@@ -573,8 +457,7 @@ function make_story(seq)
    end
 
    level_teardown = function()
-      text:delete_me(1)
-      press:delete_me(1)
+      Indicator.terminate_all()
       bg:delete_me(1)
       comp:delete_me(1)
    end
@@ -621,10 +504,7 @@ function story()
          ctrl.text_chunk(story[5])()
          sink:terminate()
          spawner:terminate()
-         local fn = function(obj)
-            obj:terminate()
-         end
-         DynO.with_all_of_type(fn, SlowPhoton)
+         DynO.terminate_all(SlowPhoton)
       end,
       function(ctrl)
          demo_player:terminate()
@@ -725,18 +605,13 @@ function level1()
 
    local bg = make_background()
    player = L1Player({0.1, screen_height/2}, vector.new({200, 0}))
-   local labels = indicators()
+   indicators()
 
    level_running_test = level_timer()
    level_teardown = function()
       player_last_stats = player:stats()
-      for ii, label in ipairs(labels) do
-         label:terminate()
-      end
-      local term = function(obj)
-         obj:terminate()
-      end
-      DynO.with_all(term)
+      Indicator.terminate_all()
+      DynO.terminate_all()
       bg:delete_me(1)
    end
 
@@ -760,18 +635,13 @@ function level2()
    -- so they'll be safe for a little while
    player = L2Player({0.1, screen_height*4/5}, vector.new({player_last_stats.speed, 0}))
 
-   local labels = indicators()
+   indicators()
 
    level_running_test = level_timer()
    level_teardown = function()
       player_last_stats = player:stats()
-      for ii, label in ipairs(labels) do
-         label:terminate()
-      end
-      local term = function(obj)
-         obj:terminate()
-      end
-      DynO.with_all(term)
+      Indicator.terminate_all()
+      DynO.terminate_all()
       bg:delete_me(1)
    end
 
@@ -779,13 +649,12 @@ function level2()
 end
 
 function level_end()
-   local labels = indicators()
+   indicators()
    player_indicator:update('Distance Traveled  %.3f au', dist2au(player_last_stats.distance))
    time_indicator:update('Best Speed  %.4f c', player_last_stats.best_speed / c)
 
    local pressz = Indicator(font, {screen_width/2, screen_height/2})
    pressz:update('Press Z to Play Again')
-   table.insert(labels, pressz)
 
    player_last_stats = {}
 
@@ -798,9 +667,7 @@ function level_end()
       return (not trigger(input.action1))
    end
    level_teardown = function()
-      for ii, label in ipairs(labels) do
-         label:terminate()
-      end
+      Indicator.terminate_all()
       bg:delete_me(1)
       next_level = 2
    end
