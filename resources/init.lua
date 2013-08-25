@@ -258,9 +258,13 @@ function Player:update()
    self.dist = dist + vel[1] * world:dt()
 
    local input = util.input_state()
+   local updown = input.updown
+   if updown == 0 then
+      updown = -input.leftright
+   end
 
    -- adjust updown vel if buttun is pressed
-   local yspd_adj = input.updown * self.max_delta_speed * world:dt()
+   local yspd_adj = updown * self.max_delta_speed * world:dt()
    if math.abs(yspd_adj + vel[2]) > self.max_speed then
       -- cap the speed
       yspd_adj = util.sign(vel[2]) * self.max_speed - vel[2]
