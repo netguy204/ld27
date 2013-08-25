@@ -164,54 +164,13 @@ function Photon:update()
    end
 end
 
-local transition_table = nil
-
-function Photon:colliding_with(other)
-   if other:is_a(Photon) then
-      local transitions = transition_table[getmetatable(self)] or {}
-      local newtype = transitions[getmetatable(other)]
-
-      -- 'become' a new type
-      if newtype and (not self.cooling) then
-         local go = self:go()
-         if not go then return end
-
-         newtype.make(go:pos(), self.sink)
-         self:terminate()
-
-         local fn = function()
-            self.cooling = false
-         end
-         Timer():reset(1.0, fn)
-         self.cooling = true
-      end
-   end
-end
-
-local HyperPhoton = oo.class(Photon)
 local EnergeticPhoton = oo.class(Photon)
 local SlowPhoton = oo.class(Photon)
 
-transition_table = {
-   [HyperPhoton] = { [SlowPhoton] = EnergeticPhoton },
-   [EnergeticPhoton] = { [SlowPhoton] = SlowPhoton },
-   [SlowPhoton] = { [HyperPhoton] = EnergeticPhoton}
-}
-
-HyperPhoton.min_speed = 500
-HyperPhoton.max_speed = 600
 EnergeticPhoton.min_speed = 300
 EnergeticPhoton.max_speed = 500
 SlowPhoton.min_speed = 100
 SlowPhoton.max_speed = 300
-
-function HyperPhoton:init(pos, vel, sink)
-   Photon.init(self, pos, vel, sink, 'hyper_photon')
-end
-
-function HyperPhoton.make(pos, sink)
-   return HyperPhoton(pos, util.rand_vector(HyperPhoton.min_speed, HyperPhoton.max_speed), sink)
-end
 
 function EnergeticPhoton:init(pos, vel, sink)
    Photon.init(self, pos, vel, sink, 'energetic_photon')
@@ -285,9 +244,7 @@ function Player:colliding_with(other)
       local veladj = nil
 
       if other:is_a(EnergeticPhoton) then
-         veladj = vector.new({100, 0})
-      elseif other:is_a(HyperPhoton) then
-         veladj = vector.new({300, 0})
+         veladj = vector.new({150, 0})
       elseif other:is_a(SlowPhoton) then
          veladj = vector.new({-100, 0})
       end
@@ -550,7 +507,7 @@ function level1()
    local esource_pos = {util.rand_between(screen_width/3, screen_width*2/3),
                         util.rand_between(screen_height/3, screen_height*2/3)}
    local energetic_sink = Sink(esink_pos)
-   local energetic_spawner = Source(esource_pos, HyperPhoton, energetic_sink)
+   local energetic_spawner = Source(esource_pos, EnergeticPhoton, energetic_sink)
 
    local ssink_pos = {0, util.rand_between(screen_height/6, screen_height*5/6)}
    local ssource_pos = {util.rand_between(screen_width/3, screen_width*2/3),
