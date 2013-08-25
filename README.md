@@ -11,13 +11,16 @@ Demo Release
 
 I created this build on Saturday night when the game was roughly at
 its "halfway-done" point. This will run on Mac, Windows, and Linux:
+
 http://bit.ly/1dEoDZZ
 
 Final Release
 =============
 
-Not yet complete! This will be released near the end of the 48 hour
-competition (ends Sunday, 9PM EST).
+This release will also run on Mac, Windows, and Linux. There are
+currently no known issues.
+
+http://bit.ly/14vQ58Y
 
 Build from Source
 =================
