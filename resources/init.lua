@@ -14,6 +14,8 @@ local player = nil
 local player_last_stats = {speed=100} -- fixme: for testing
 local next_level = 1
 local story_played = false
+local star_particles = nil
+local background_color = {0,0,0,1}
 
 local sfx = {}
 
@@ -81,6 +83,52 @@ end
 
 function dist2au(dist)
    return dist * 3e6 / 150e9
+end
+
+local function star_flame(go)
+   local _art = world:atlas_entry(constant.ATLAS, 'fire')
+   local params =
+      {def=
+          {layer=constant.BACKGROUND,
+           n=1000,
+           renderer={name='PSC_E2SystemRenderer',
+                     params={entry=_art}},
+           activator={name='PSConstantRateActivator',
+                      params={rate=10000}},
+           components={
+              {name='PSConstantAccelerationUpdater',
+               params={acc={0,10}}},
+              {name='PSTimeAlphaUpdater',
+               params={time_constant=0.3,
+                       max_scale=6.0}},
+              {name='PSFireColorUpdater',
+               params={max_life=0.5,
+                       start_temperature=9000,
+                       end_temperature=500}},
+              {name='PSBoxInitializer',
+               params={initial={0,0,screen_width,0},
+                       refresh={0,0,screen_width,0},
+                       minv={-100,100},
+                       maxv={100,300}}},
+              {name='PSTimeInitializer',
+               params={min_life=0.3,
+                       max_life=0.6}},
+              {name='PSTimeTerminator'}}}}
+
+   return go:add_component('CParticleSystem', params)
+end
+
+local function enable_star_particles()
+   if not star_particles then
+      star_particles = star_flame(stage)
+   end
+end
+
+local function disable_star_particles()
+   if star_particles then
+      star_particles:delete_me(1)
+   end
+   star_particles = nil
 end
 
 local Indicator = oo.class(oo.Object)
@@ -206,7 +254,40 @@ end
 local czor = world:create_object('Compositor')
 
 function background()
-   czor:clear_with_color(util.rgba(255,255,255,255))
+   czor:clear_with_color(background_color)
+end
+
+local function player_streak(go)
+   local _art = world:atlas_entry(constant.ATLAS, 'photon')
+   local params =
+      {def=
+          {layer=constant.BACKGROUND,
+           n=20,
+           renderer={name='PSC_E2SystemRenderer',
+                     params={entry=_art}},
+           activator={name='PSConstantRateActivator',
+                      params={rate=10}},
+           components={
+              {name='PSConstantAccelerationUpdater',
+               params={acc={0,0}}},
+              {name='PSTimeAlphaUpdater',
+               params={time_constant=3.0,
+                       max_scale=4.0}},
+              {name='PSFireColorUpdater',
+               params={max_life=2,
+                       start_temperature=9000,
+                       end_temperature=500}},
+              {name='PSBoxInitializer',
+               params={initial={0,0,0,0},
+                       refresh={0,0,0,0},
+                       minv={0,0},
+                       maxv={0,0}}},
+              {name='PSTimeInitializer',
+               params={min_life=2,
+                       max_life=2}},
+              {name='PSTimeTerminator'}}}}
+
+   return go:add_component('CParticleSystem', params)
 end
 
 local Player = oo.class(DynO)
@@ -225,6 +306,8 @@ function Player:init(pos, vel)
    local h = _art.h * 2
    go:add_component('CColoredSprite', {entry=_art, w=w, h=h})
    go:add_component('CSensor', {fixture={type='rect', w=w, h=h, density=10}})
+
+   player_streak(go)
 end
 
 function Player:update()
@@ -295,6 +378,34 @@ function Player:stats()
            distance = self.dist,
            best_speed = best_speed}
 end
+
+local DemoPlayer = oo.class(Player)
+
+function DemoPlayer:init(pos, vel)
+   Player.init(self, pos, vel)
+
+   local go = self:go()
+   local seeker = world:create_object('SeekBrain')
+   seeker:tgt({screen_width, screen_height/2})
+   seeker:params({force_max = 50000,
+                  speed_max = vector.new(vel):length(),
+                  old_angle = 0,
+                  application_time = world:dt()})
+   go:add_component('CBrain', {brain=seeker})
+end
+
+function DemoPlayer:update()
+   local go = self:go()
+   if not go then return end
+
+   go:angle(vector.new(go:vel()):angle())
+   toroid_wrap(go)
+end
+
+function DemoPlayer:update_indicators()
+   -- no indicators
+end
+
 
 local L1Player = oo.class(Player)
 
@@ -398,7 +509,7 @@ function make_background()
    local bw = background.w
    local bh = background.h
    local bg = world:create_go()
-   bg:add_component('CStaticSprite', {entry=background, layer=constant.BACKGROUND})
+   bg:add_component('CStaticSprite', {entry=background, layer=constant.BACKERGROUND})
    bg:pos(screen_rect:center())
    return bg
 end
@@ -473,13 +584,18 @@ function story()
    local story = {
       [[Life of a Photon]],
 
-      [[I was born in Alpha Centauri, towards the end of the neptural cycle]],
+      [[I was born in star. I was young and full of hope]],
 
-      [[My cousins were supportive. We were heading in the same direction]]
+      [[My cousins were supportive. We were heading in the same direction]],
+
+      [[There were others who tried to stand in the way]],
+
+      [[Though there would be challenges, it was time to pick up speed]]
    }
 
-   local energetic_sink = nil
-   local energetic_spawner = nil
+   local sink = nil
+   local spawner = nil
+   local demo_player = DemoPlayer({screen_width/2, screen_height/2}, {200,0})
 
    local seq = {
       function(ctrl)
@@ -490,17 +606,34 @@ function story()
       end,
       function(ctrl)
          ctrl.text_chunk(story[3])()
-         energetic_sink = Sink({screen_width, screen_height/2})
-         energetic_spawner = Source({screen_width/2, screen_height/2}, EnergeticPhoton, energetic_sink)
+         sink = Sink({screen_width, screen_height/2})
+         spawner = Source({screen_width/2, screen_height/2}, EnergeticPhoton, sink)
       end,
       function(ctrl)
+         ctrl.text_chunk(story[4])()
+         sink:terminate()
+         spawner:terminate()
+
+         sink = Sink({0, screen_height/2})
+         spawner = Source({screen_width/2, screen_height/2}, SlowPhoton, sink)
+      end,
+      function(ctrl)
+         ctrl.text_chunk(story[5])()
+         sink:terminate()
+         spawner:terminate()
+         local fn = function(obj)
+            obj:terminate()
+         end
+         DynO.with_all_of_type(fn, SlowPhoton)
+      end,
+      function(ctrl)
+         demo_player:terminate()
          ctrl.running = false
-         energetic_sink:terminate()
-         energetic_spawner:terminate()
       end
    }
 
    make_story(seq)
+   enable_star_particles()
 end
 
 function launch_story()
@@ -512,6 +645,7 @@ function launch_story()
       [[I knew that I shouldnt get too close. They would only sap my energy]]
    }
 
+   local demo_player = DemoPlayer({0.1, screen_height/2}, {player_last_stats.speed, 0})
    local seq = {
       function(ctrl)
          if story_played then
@@ -529,10 +663,12 @@ function launch_story()
       function(ctrl)
          ctrl.running = false
          story_played = true
+         demo_player:terminate()
       end
    }
 
    make_story(seq)
+   disable_star_particles()
 end
 
 function finish_story()
@@ -551,7 +687,7 @@ function finish_story()
       table.insert(story, [[Sad to say, my life didnt go far]])
    elseif dist2au(player_last_stats.distance) < 0.1 then
       table.insert(story, [[I didnt settle far from home, but it was a good trip]])
-   elseif dist2au(player_last_stats.distance) < 0.3 then
+   elseif dist2au(player_last_stats.distance) < 0.2 then
       table.insert(story, [[I reached for the stars and really almost made it]])
    else
       table.insert(story, [[No one I know has ever seen what Ive seen]])
@@ -602,6 +738,8 @@ function level1()
       DynO.with_all(term)
       bg:delete_me(1)
    end
+
+   enable_star_particles()
 end
 
 function level2()
@@ -635,6 +773,8 @@ function level2()
       DynO.with_all(term)
       bg:delete_me(1)
    end
+
+   disable_star_particles()
 end
 
 function level_end()
