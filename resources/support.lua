@@ -64,7 +64,39 @@ function toroid_wrap(go)
    return change
 end
 
-local function star_flame(go)
+function background_stars(go)
+   local _art = world:atlas_entry(constant.ATLAS, 'star1')
+   local params =
+      {def=
+          {n=200,
+           layer=constant.BACKDROP,
+           renderer={name='PSC_E2SystemRenderer',
+                     params={entry=_art}},
+           components={
+              {name='PSConstantAccelerationUpdater',
+               params={acc={0, 0}}},
+              {name='PSBoxInitializer',
+               params={initial={-_art.w, -_art.h,
+                                screen_width + _art.w,
+                                screen_height + _art.h},
+                       refresh={screen_width + _art.w, - _art.h,
+                                screen_width + _art.w, screen_height + _art.h},
+                       minv={-400, 0},
+                       maxv={-100, 0}}},
+              {name='PSRandColorInitializer',
+               params={min_color={0.8, 0.8, 0.8, 0.2},
+                       max_color={1.0, 1.0, 1.0, 1.0}}},
+              {name='PSRandScaleInitializer',
+               params={min_scale=0.5,
+                       max_scale=1.5}},
+              {name='PSBoxTerminator',
+               params={rect={-_art.w*2, -_art.h*2,
+                             screen_width + _art.w * 2,
+                             screen_height + _art.h * 2}}}}}}
+   return go:add_component('CParticleSystem', params)
+end
+
+function star_flame(go)
    local _art = world:atlas_entry(constant.ATLAS, 'fire')
    local params =
       {def=

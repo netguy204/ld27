@@ -458,13 +458,7 @@ function level_timer()
 end
 
 function make_background()
-   local background = world:atlas_entry('resources/background1', 'background1')
-   local bw = background.w
-   local bh = background.h
-   local bg = world:create_go()
-   bg:add_component('CStaticSprite', {entry=background, layer=constant.BACKERGROUND})
-   bg:pos(screen_rect:center())
-   return bg
+   return background_stars(stage)
 end
 
 function screen_sequence(fns, ...)
@@ -503,8 +497,6 @@ function make_story(seq)
    press_black:update(press)
    press_white:update(press)
 
-   local bg = make_background()
-
    local text_chunk = function(str)
       local fn = function()
          text:update(str)
@@ -525,7 +517,6 @@ function make_story(seq)
 
    level_teardown = function()
       Indicator.terminate_all()
-      bg:delete_me(1)
       comp:delete_me(1)
    end
 end
@@ -679,7 +670,6 @@ function level1()
    local slow_spawner = Source(ssource_pos, SlowPhoton, slow_sink)
    slow_spawner.rate = 4
 
-   local bg = make_background()
    player = L1Player({0.1, screen_height/2}, vector.new({200, 0}))
    indicators()
 
@@ -688,7 +678,6 @@ function level1()
       player_last_stats = player:stats()
       Indicator.terminate_all()
       DynO.terminate_all()
-      bg:delete_me(1)
    end
 
    enable_star_particles()
@@ -696,8 +685,6 @@ end
 
 function level2()
    math.randomseed(level_seed)
-
-   local bg = make_background()
 
    -- scatter some rocks
    local nrocks = 5
@@ -720,7 +707,6 @@ function level2()
       player_last_stats = player:stats()
       Indicator.terminate_all()
       DynO.terminate_all()
-      bg:delete_me(1)
    end
 
    disable_star_particles()
@@ -768,8 +754,6 @@ function level_end()
 
    player_last_stats = {}
 
-   local bg = make_background()
-
    local trigger = util.rising_edge_trigger(true)
 
    level_running_test = function()
@@ -778,7 +762,6 @@ function level_end()
    end
    level_teardown = function()
       Indicator.terminate_all()
-      bg:delete_me(1)
       next_level = 2
    end
 end
@@ -786,6 +769,7 @@ end
 function init()
    local songs = {'resources/stellar_nursery.ogg'}
    util.loop_music(songs)
+   make_background()
 
    load_sfx('goodie', {'resources/goodie1.ogg'})
    load_sfx('baddie', {'resources/baddie1.ogg'})
