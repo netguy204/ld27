@@ -272,7 +272,7 @@ function Player:update()
    local last_dist = self.last_dist or 0
    local new_dist = math.floor((self.dist or 0) / trail_spacing)
    if not (new_dist == last_dist) then
-      local item = {pos=pos, color={1,1,1,1}, angle=angle, scale=1}
+      local item = {pos=pos, color={1,1,1,0.5}, angle=angle, scale=1}
       self:add_trail_component(item)
       table.insert(self:world_trail(), item)
    end
