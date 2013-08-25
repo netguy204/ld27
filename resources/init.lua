@@ -68,6 +68,12 @@ function Source:init(pos, kind, sink)
    self.kind = kind
    self.sink = sink
    self.timer:reset(util.rand_exponential(self.rate), self:bind('spawn'))
+
+   local go = self:go()
+   local _art = world:atlas_entry(constant.ATLAS, 'goodie_source')
+   local w = _art.w * 2
+   local h = _art.h * 2
+   go:add_component('CColoredSprite', {entry=_art, w=w, h=h})
 end
 
 function Source:spawn()
@@ -97,7 +103,7 @@ function Photon:init(pos, vel, sink, image)
    local _art = world:atlas_entry(constant.ATLAS, image)
    local w = _art.w
    local h = _art.h
-   go:add_component('CColoredSprite', {entry=_art, w=2*w, h=2*h})
+   self.sprite = go:add_component('CColoredSprite', {entry=_art, w=2*w, h=2*h})
    go:add_component('CSensor', {fixture={type='rect', w=2*w, h=2*h}})
 
    local seeker = world:create_object('SeekBrain')
@@ -137,6 +143,7 @@ end
 
 function SlowPhoton:init(pos, vel, sink)
    Photon.init(self, pos, vel, sink, 'slow_photon')
+   self.sprite:angle_offset(math.pi)
 end
 
 function SlowPhoton.make(pos, sink)
