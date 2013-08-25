@@ -13,6 +13,21 @@ local player_indicator = nil
 local player = nil
 local player_last_stats = {speed=100} -- fixme: for testing
 local next_level = 1
+local story_played = false
+
+local sfx = {}
+
+local function load_sfx(kind, names)
+   sfx[kind] = {}
+   for ii, name in ipairs(names) do
+      table.insert(sfx[kind], world:get_sound(name, 1.0))
+   end
+end
+
+local function play_sfx(kind)
+   local snd = util.rand_choice(sfx[kind])
+   world:play_sound(snd, 1)
+end
 
 local level_teardown = function()
 end
@@ -245,15 +260,17 @@ function Player:colliding_with(other)
 
       if other:is_a(EnergeticPhoton) then
          veladj = vector.new({150, 0})
+         play_sfx('goodie')
       elseif other:is_a(SlowPhoton) then
          veladj = vector.new({-100, 0})
+         play_sfx('baddie')
       end
 
       local newvel = vel + veladj
 
-      -- don't let us go backwards
-      if newvel[1] < 0 then
-         veladj[1] = -vel[1]
+      -- don't let us go too slow
+      if newvel[1] < 100 then
+         veladj[1] = 100 - vel[1]
       end
 
       -- apply the adjustment using the gamma of the proposed final
@@ -329,7 +346,7 @@ function Rock:init(pos, vel, spin_rate)
    local _art = world:atlas_entry(constant.ATLAS, 'rock1')
    local w = 2*_art.w
    local h = 2*_art.h
-   local r = math.sqrt(w*w + h*h) * 0.5
+   local r = math.sqrt(w*w + h*h) * 0.3
 
    go:add_component('CColoredSprite', {entry=_art, w=w, h=h})
    go:add_component('CSensor', {fixture={type='circle', radius=r, density=100}})
@@ -362,7 +379,7 @@ function level_timer()
       local spd = vel:length()
       time_remaining = time_remaining - time_update_period / gamma(spd)
       local dilation = 1 - 1/gamma(spd)
-      time_indicator:update('Time Remaining  %01.3f', time_remaining)
+      time_indicator:update('Time Remaining  %.1f', time_remaining)
       time_timer:reset(time_update_period, time_updater)
    end
    time_updater()
@@ -392,18 +409,21 @@ function screen_sequence(fns, ...)
 
    fns[current](table.unpack(args))
    local thread = function(go, comp)
-      local input = util.input_state()
-      if trigger(input.action1) then
-         current = current + 1
-         if current == count then
-            comp:delete_me(1)
+      while true do
+         coroutine.yield()
+         local input = util.input_state()
+         if trigger(input.action1) then
+            current = current + 1
+            fns[current](table.unpack(args))
+            if current == count then
+               return
+            end
          end
-         fns[current](table.unpack(args))
       end
    end
 
    if count > 1 then
-      local comp = stage:add_component('CScripted', {update_thread=util.fthread(thread)})
+      return stage:add_component('CScripted', {update_thread=util.thread(thread)})
    end
 end
 
@@ -428,21 +448,22 @@ function make_story(seq)
       return fn
    end
 
-   local story = {
+   local ctrl = {
       text_chunk = text_chunk,
       running = true
    }
 
-   screen_sequence(seq, story)
+   local comp = screen_sequence(seq, ctrl)
 
    level_running_test = function()
-      return story.running
+      return ctrl.running
    end
 
    level_teardown = function()
       text:delete_me(1)
       press:delete_me(1)
       bg:delete_me(1)
+      comp:delete_me(1)
    end
 end
 
@@ -452,12 +473,11 @@ function story()
 
       [[I was born in Alpha Centauri, towards the end of the neptural cycle]],
 
-      [[My mother had always been energetic.
- When she fused, no one was surprised]],
-
-      [[I enjoyed my time in the stellar nusery. My cousins were supportive
-of the direction that I was heading]]
+      [[My cousins were supportive. We were heading in the same direction]]
    }
+
+   local energetic_sink = nil
+   local energetic_spawner = nil
 
    local seq = {
       function(ctrl)
@@ -468,12 +488,13 @@ of the direction that I was heading]]
       end,
       function(ctrl)
          ctrl.text_chunk(story[3])()
-      end,
-      function(ctrl)
-         ctrl.text_chunk(story[4])()
+         energetic_sink = Sink({screen_width, screen_height/2})
+         energetic_spawner = Source({screen_width/2, screen_height/2}, EnergeticPhoton, energetic_sink)
       end,
       function(ctrl)
          ctrl.running = false
+         energetic_sink:terminate()
+         energetic_spawner:terminate()
       end
    }
 
@@ -484,8 +505,55 @@ function launch_story()
    local story = {
       [[I soared out the stellar nursary and into the vastness of space]],
 
-      [[There I encountered objects that were far more massive than I]]
+      [[There I encountered objects that were far more massive than I]],
+
+      [[I knew that I shouldnt get too close. They would only sap my energy]]
    }
+
+   local seq = {
+      function(ctrl)
+         if story_played then
+            ctrl.running = false
+         else
+            ctrl.text_chunk(story[1])()
+         end
+      end,
+      function(ctrl)
+         ctrl.text_chunk(story[2])()
+      end,
+      function(ctrl)
+         ctrl.text_chunk(story[3])()
+      end,
+      function(ctrl)
+         ctrl.running = false
+         story_played = true
+      end
+   }
+
+   make_story(seq)
+end
+
+function finish_story()
+   local story = {}
+   if (player_last_stats.best_speed / c) < 0.3 then
+      table.insert(story, [[In spite of my best efforts, I never really picked up speed]])
+   elseif (player_last_stats.best_speed / c) < 0.6 then
+      table.insert(story, [[I made good time through the trials of life]])
+   elseif (player_last_stats.best_speed / c) < 0.8 then
+      table.insert(story, [[In the end, I was known as one of the quickest and brightest]])
+   else
+      table.insert(story, [[Nothing in the universe could match my speed]])
+   end
+
+   if dist2au(player_last_stats.distance) < 0.05 then
+      table.insert(story, [[Sad to say, my life didnt go far]])
+   elseif dist2au(player_last_stats.distance) < 0.1 then
+      table.insert(story, [[I didnt settle far from home, but it was a good trip]])
+   elseif dist2au(player_last_stats.distance) < 0.3 then
+      table.insert(story, [[I reached for the stars and really almost made it]])
+   else
+      table.insert(story, [[No one I know has ever seen what Ive seen]])
+   end
 
    local seq = {
       function(ctrl)
@@ -580,9 +648,11 @@ function level_end()
 
    local bg = make_background()
 
+   local trigger = util.rising_edge_trigger(true)
+
    level_running_test = function()
       local input = util.input_state()
-      return (not input.action1)
+      return (not trigger(input.action1))
    end
    level_teardown = function()
       for ii, label in ipairs(labels) do
@@ -594,6 +664,12 @@ function level_end()
 end
 
 function init()
+   local songs = {'resources/stellar_nursery.ogg'}
+   util.loop_music(songs)
+
+   load_sfx('goodie', {'resources/goodie1.ogg'})
+   load_sfx('baddie', {'resources/baddie1.ogg'})
+
    math.randomseed(os.time())
    util.install_basic_keymap()
    world:gravity({0,0})
@@ -603,9 +679,7 @@ function init()
 
    font = default_font()
 
-   local levels = { story, level1, launch_story, level2, level_end }
-   local songs = {'resources/stellar_nursery.ogg'}
-   util.loop_music(songs)
+   local levels = { story, level1, launch_story, level2, finish_story, level_end }
 
    local level_progression = function()
       if not level_running_test() then
