@@ -379,8 +379,10 @@ function level_timer()
       local spd = vel:length()
       time_remaining = time_remaining - time_update_period / gamma(spd)
       local dilation = 1 - 1/gamma(spd)
-      time_indicator:update('Time Remaining  %.1f', time_remaining)
-      time_timer:reset(time_update_period, time_updater)
+      time_indicator:update('Time Remaining %.1f', time_remaining)
+      if time_remaining > 0 then
+         time_timer:reset(time_update_period, time_updater)
+      end
    end
    time_updater()
 
