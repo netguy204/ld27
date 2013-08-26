@@ -68,14 +68,35 @@ function Source:init(pos, kind, sink)
    self.kind = kind
    self.sink = sink
    self.timer:reset(util.rand_exponential(self.rate), self:bind('spawn'))
+
+   local go = self:go()
+   local _art = world:atlas_entry(constant.ATLAS, 'goodie_source')
+   local w = _art.w * 2
+   local h = _art.h * 2
+   self.sprite = go:add_component('CColoredSprite', {entry=_art, w=w, h=h})
 end
 
 function Source:spawn()
    local go = self:go()
    if not go then return end
 
-   self.kind.make(go:pos(), self.sink)
    self.timer:reset(util.rand_exponential(self.rate), self:bind('spawn'))
+   return  self.kind.make(go:pos(), self.sink)
+end
+
+local L2Source = oo.class(Source)
+
+function L2Source:init(pos, kind, sink)
+   Source.init(self, pos, kind, sink)
+   self.sprite:delete_me(1)
+end
+
+function L2Source:spawn()
+   local obj = Source.spawn(self)
+
+   -- force a boring velocity
+   if not obj then return end
+   obj:go():vel({200,0})
 end
 
 local Sink = oo.class(DynO)
@@ -97,7 +118,7 @@ function Photon:init(pos, vel, sink, image)
    local _art = world:atlas_entry(constant.ATLAS, image)
    local w = _art.w
    local h = _art.h
-   go:add_component('CColoredSprite', {entry=_art, w=2*w, h=2*h})
+   self.sprite = go:add_component('CColoredSprite', {entry=_art, w=2*w, h=2*h})
    go:add_component('CSensor', {fixture={type='rect', w=2*w, h=2*h}})
 
    local seeker = world:create_object('SeekBrain')
@@ -137,6 +158,7 @@ end
 
 function SlowPhoton:init(pos, vel, sink)
    Photon.init(self, pos, vel, sink, 'slow_photon')
+   self.sprite:angle_offset(math.pi)
 end
 
 function SlowPhoton.make(pos, sink)
@@ -251,9 +273,13 @@ function Player:update()
    self.dist = dist + vel[1] * world:dt()
 
    local input = util.input_state()
+   local updown = input.updown
+   if updown == 0 then
+      updown = -input.leftright
+   end
 
    -- adjust updown vel if buttun is pressed
-   local yspd_adj = input.updown * self.max_delta_speed * world:dt()
+   local yspd_adj = updown * self.max_delta_speed * world:dt()
    if math.abs(yspd_adj + vel[2]) > self.max_speed then
       -- cap the speed
       yspd_adj = util.sign(vel[2]) * self.max_speed - vel[2]
@@ -458,13 +484,7 @@ function level_timer()
 end
 
 function make_background()
-   local background = world:atlas_entry('resources/background1', 'background1')
-   local bw = background.w
-   local bh = background.h
-   local bg = world:create_go()
-   bg:add_component('CStaticSprite', {entry=background, layer=constant.BACKERGROUND})
-   bg:pos(screen_rect:center())
-   return bg
+   return background_stars(stage)
 end
 
 function screen_sequence(fns, ...)
@@ -503,8 +523,6 @@ function make_story(seq)
    press_black:update(press)
    press_white:update(press)
 
-   local bg = make_background()
-
    local text_chunk = function(str)
       local fn = function()
          text:update(str)
@@ -525,7 +543,6 @@ function make_story(seq)
 
    level_teardown = function()
       Indicator.terminate_all()
-      bg:delete_me(1)
       comp:delete_me(1)
    end
 end
@@ -679,7 +696,6 @@ function level1()
    local slow_spawner = Source(ssource_pos, SlowPhoton, slow_sink)
    slow_spawner.rate = 4
 
-   local bg = make_background()
    player = L1Player({0.1, screen_height/2}, vector.new({200, 0}))
    indicators()
 
@@ -688,7 +704,6 @@ function level1()
       player_last_stats = player:stats()
       Indicator.terminate_all()
       DynO.terminate_all()
-      bg:delete_me(1)
    end
 
    enable_star_particles()
@@ -696,8 +711,6 @@ end
 
 function level2()
    math.randomseed(level_seed)
-
-   local bg = make_background()
 
    -- scatter some rocks
    local nrocks = 5
@@ -715,12 +728,17 @@ function level2()
 
    indicators()
 
+   -- add offscreen source and sync to provide a stream of goodies in
+   -- case you get stuck
+   local sink = Sink({screen_width, screen_height/2})
+   local source = L2Source({0, screen_height/2}, EnergeticPhoton, sink)
+   source.rate = 1
+
    level_running_test = level_timer()
    level_teardown = function()
       player_last_stats = player:stats()
       Indicator.terminate_all()
       DynO.terminate_all()
-      bg:delete_me(1)
    end
 
    disable_star_particles()
@@ -768,8 +786,6 @@ function level_end()
 
    player_last_stats = {}
 
-   local bg = make_background()
-
    local trigger = util.rising_edge_trigger(true)
 
    level_running_test = function()
@@ -778,7 +794,6 @@ function level_end()
    end
    level_teardown = function()
       Indicator.terminate_all()
-      bg:delete_me(1)
       next_level = 2
    end
 end
@@ -786,6 +801,7 @@ end
 function init()
    local songs = {'resources/stellar_nursery.ogg'}
    util.loop_music(songs)
+   make_background()
 
    load_sfx('goodie', {'resources/goodie1.ogg'})
    load_sfx('baddie', {'resources/baddie1.ogg'})

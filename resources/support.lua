@@ -64,34 +64,66 @@ function toroid_wrap(go)
    return change
 end
 
-local function star_flame(go)
+function background_stars(go)
+   local _art = world:atlas_entry(constant.ATLAS, 'star1')
+   local params =
+      {def=
+          {n=200,
+           layer=constant.BACKDROP,
+           renderer={name='PSC_E2SystemRenderer',
+                     params={entry=_art}},
+           components={
+              {name='PSConstantAccelerationUpdater',
+               params={acc={0, 0}}},
+              {name='PSBoxInitializer',
+               params={initial={-_art.w, -_art.h,
+                                screen_width + _art.w,
+                                screen_height + _art.h},
+                       refresh={screen_width + _art.w, - _art.h,
+                                screen_width + _art.w, screen_height + _art.h},
+                       minv={-400, 0},
+                       maxv={-100, 0}}},
+              {name='PSRandColorInitializer',
+               params={min_color={0.8, 0.8, 0.8, 0.2},
+                       max_color={1.0, 1.0, 1.0, 1.0}}},
+              {name='PSRandScaleInitializer',
+               params={min_scale=0.5,
+                       max_scale=1.5}},
+              {name='PSBoxTerminator',
+               params={rect={-_art.w*2, -_art.h*2,
+                             screen_width + _art.w * 2,
+                             screen_height + _art.h * 2}}}}}}
+   return go:add_component('CParticleSystem', params)
+end
+
+function star_flame(go)
    local _art = world:atlas_entry(constant.ATLAS, 'fire')
    local params =
       {def=
           {layer=constant.BACKGROUND,
-           n=1000,
+           n=500,
            renderer={name='PSC_E2SystemRenderer',
                      params={entry=_art}},
            activator={name='PSConstantRateActivator',
-                      params={rate=10000}},
+                      params={rate=5000}},
            components={
               {name='PSConstantAccelerationUpdater',
                params={acc={0,10}}},
               {name='PSTimeAlphaUpdater',
-               params={time_constant=0.3,
+               params={time_constant=0.8,
                        max_scale=6.0}},
               {name='PSFireColorUpdater',
                params={max_life=0.5,
                        start_temperature=9000,
                        end_temperature=500}},
               {name='PSBoxInitializer',
-               params={initial={0,0,screen_width,0},
-                       refresh={0,0,screen_width,0},
+               params={initial={0,-50,screen_width,-30},
+                       refresh={0,-50,screen_width,-30},
                        minv={-100,100},
                        maxv={100,300}}},
               {name='PSTimeInitializer',
-               params={min_life=0.3,
-                       max_life=0.6}},
+               params={min_life=0.25,
+                       max_life=0.35}},
               {name='PSTimeTerminator'}}}}
 
    return go:add_component('CParticleSystem', params)
