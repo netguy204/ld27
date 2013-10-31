@@ -70,7 +70,7 @@ function Source:init(pos, kind, sink)
    self.timer:reset(util.rand_exponential(self.rate), self:bind('spawn'))
 
    local go = self:go()
-   local _art = world:atlas_entry(constant.ATLAS, 'goodie_source')
+   local _art = game:atlas_entry(constant.ATLAS, 'goodie_source')
    local w = _art.w * 2
    local h = _art.h * 2
    self.sprite = go:add_component('CColoredSprite', {entry=_art, w=w, h=h})
@@ -115,13 +115,13 @@ function Photon:init(pos, vel, sink, image)
    go:vel(vel)
    go:fixed_rotation(0)
 
-   local _art = world:atlas_entry(constant.ATLAS, image)
+   local _art = game:atlas_entry(constant.ATLAS, image)
    local w = _art.w
    local h = _art.h
    self.sprite = go:add_component('CColoredSprite', {entry=_art, w=2*w, h=2*h})
    go:add_component('CSensor', {fixture={type='rect', w=2*w, h=2*h}})
 
-   local seeker = world:create_object('SeekBrain')
+   local seeker = game:create_object('SeekBrain')
    seeker:tgt(sink:go():pos())
    seeker:params({force_max = 50000,
                   speed_max = vector.length(vel),
@@ -165,14 +165,14 @@ function SlowPhoton.make(pos, sink)
    return SlowPhoton(pos, util.rand_vector(SlowPhoton.min_speed, SlowPhoton.max_speed), sink)
 end
 
-local czor = world:create_object('Compositor')
+local czor = game:create_object('Compositor')
 
 function background()
    czor:clear_with_color(background_color)
 end
 
 local function player_streak(go)
-   local _art = world:atlas_entry(constant.ATLAS, 'photon')
+   local _art = game:atlas_entry(constant.ATLAS, 'photon')
    local params =
       {def=
           {layer=constant.BACKGROUND,
@@ -212,13 +212,13 @@ function Player:init(pos, vel)
    self.max_delta_speed = 1000
    self.current_screen = 1
    self.trail = {}
-   self._trail = world:atlas_entry(constant.ATLAS, 'trail')
+   self._trail = game:atlas_entry(constant.ATLAS, 'trail')
 
    local go = self:go()
    go:vel(vel)
    go:fixed_rotation(0)
 
-   local _art = world:atlas_entry(constant.ATLAS, 'photon')
+   local _art = game:atlas_entry(constant.ATLAS, 'photon')
    local w = _art.w * 2
    local h = _art.h * 2
    go:add_component('CColoredSprite', {entry=_art, w=w, h=h})
@@ -318,7 +318,7 @@ function Player:terminate()
    end
 end
 
-function Player:colliding_with(other)
+function Player:started_colliding_with(other)
    if other:is_a(Photon) then
       local go = self:go()
       local vel = vector.new(go:vel())
@@ -369,7 +369,7 @@ function DemoPlayer:init(pos, vel)
    Player.init(self, pos, vel)
 
    local go = self:go()
-   local seeker = world:create_object('SeekBrain')
+   local seeker = game:create_object('SeekBrain')
    seeker:tgt({screen_width, screen_height/2})
    seeker:params({force_max = 50000,
                   speed_max = vector.new(vel):length(),
@@ -434,7 +434,7 @@ function Rock:init(pos, vel, spin_rate)
    go:vel(vel)
    go:angle_rate(spin_rate)
 
-   local _art = world:atlas_entry(constant.ATLAS, 'rock1')
+   local _art = game:atlas_entry(constant.ATLAS, 'rock1')
    local w = 2*_art.w
    local h = 2*_art.h
    local r = math.sqrt(w*w + h*h) * 0.3
@@ -831,6 +831,6 @@ function init()
    stage:add_component('CScripted', {update_thread=util.fthread(level_progression)})
 end
 
-function level_init()
+function game_init()
    util.protect(init)()
 end

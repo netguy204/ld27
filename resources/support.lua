@@ -7,35 +7,41 @@ local util = require 'util'
 local Rect = require 'Rect'
 
 font = nil
-screen_rect = Rect(0, 0, screen_width, screen_height)
-
+screen_rect = Rect(camera:viewport())
+screen_width = screen_rect:width()
+screen_height = screen_rect:height()
 
 local sfx = {}
 
 function load_sfx(kind, names)
    sfx[kind] = {}
    for ii, name in ipairs(names) do
-      table.insert(sfx[kind], world:get_sound(name, 1.0))
+      table.insert(sfx[kind], game:get_sound(name, 1.0))
    end
 end
 
 function play_sfx(kind)
    local snd = util.rand_choice(sfx[kind])
-   world:play_sound(snd, 1)
+   game:play_sound(snd, 1)
 end
 
 function default_font()
    if not font then
       local characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!?,\'"'
-      font = world:create_object('Font')
-      font:load(world:atlas(constant.ATLAS), 'visitor', characters)
+      font = game:create_object('Font')
+      font:load(game:atlas(constant.ATLAS), 'visitor', characters)
       font:scale(3)
-      font:set_char_width('i', 3)
-      font:set_char_lead('i', -2)
-      font:set_char_width('.', 3)
-      font:set_char_lead('.', -2)
-      font:set_char_width(',', 3)
-      font:set_char_lead(',', -3)
+      for ii = 1, #characters do
+         local c = characters:sub(ii, ii)
+         font:set_char_xadvance(c, 6)
+      end
+
+      font:set_char_xadvance('i', 2)
+      font:set_char_xlead('i', -2)
+      --font:set_char_xadvance('.', 3)
+      --font:set_char_xlead('.', -2)
+      --font:set_char_xadvance(',', 3)
+      --font:set_char_xlead(',', -3)
       font:word_separation(5)
    end
    return font
@@ -65,7 +71,8 @@ function toroid_wrap(go)
 end
 
 function background_stars(go)
-   local _art = world:atlas_entry(constant.ATLAS, 'star1')
+   local _art = game:atlas_entry(constant.ATLAS, 'star1')
+
    local params =
       {def=
           {n=200,
@@ -97,7 +104,8 @@ function background_stars(go)
 end
 
 function star_flame(go)
-   local _art = world:atlas_entry(constant.ATLAS, 'fire')
+   local _art = game:atlas_entry(constant.ATLAS, 'fire')
+
    local params =
       {def=
           {layer=constant.BACKGROUND,
